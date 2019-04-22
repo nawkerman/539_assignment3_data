@@ -1,0 +1,147 @@
+---
+title: "Federal Spending Report by Department"
+author: "Nate Awkerman"
+date: "4/21/2019"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(gapminder)
+library(ggplot2)
+library(dplyr)
+library(broom)
+```
+
+This will be a brief report on the nature of government spending, broken down by department, for spending on energy based research and development, climate based research and development, and overall budgeting for each department along with statistical tests regarding the likelihood of rejecting the null hypothesis for each linear regression presented.
+
+```{r files_and_regressions, include=FALSE}
+energy_spending <- read_csv("energy_spending.csv")
+climate_spending <- read_csv("climate_spending.csv")
+fed_r_d_spending <- read_csv("fed_r_d_spending.csv")
+
+by_department_energy = energy_spending %>% group_by(department)
+by_department_climate = climate_spending %>% group_by(department)
+by_department_budget = fed_r_d_spending %>% group_by(department)
+
+
+regression_energy = do(by_department_energy, 
+   glance(lm(energy_spending ~ year, data = .)))
+regression_climate = do(by_department_climate, 
+   glance(lm(gcc_spending ~ year, data = .)))
+regression_gdp_byyear = do(fed_r_d_spending, 
+   glance(lm(gdp ~ year, data = .)))
+regression_rd_budget_bygdp = do(by_department_budget, 
+   glance(lm(rd_budget ~ gdp, data = .)))
+```
+
+## Gross Domestic Product of the USA by Year
+
+```{r gdp_per_year, echo=FALSE}
+gdp_per_year <- ggplot(fed_r_d_spending, aes(x=year, y=gdp))
+
+gdp_per_year = gdp_per_year + geom_point() + geom_smooth(method = "lm") + 
+  ylab("GDP") 
+
+rd_by_gdp <- ggplot(fed_r_d_spending, aes(x=gdp, y=rd_budget,
+                                          color=department))
+ordered_legend_budget <- filter(fed_r_d_spending, year == max(year)) %>%
+  arrange(desc(rd_budget)) %>% pull(department)
+rd_by_gdp = rd_by_gdp + geom_point() + geom_smooth(method = "lm") +
+  scale_color_discrete(breaks = ordered_legend_budget, name = "Department") + 
+  ylab("Spending")
+
+plot(gdp_per_year)
+```
+This graph displays the gross domestic product of the United States of America based on year from the years of 1976 to 2017. As can be seen from the graph, the relationship is apparent and with a p-value of `r  {regression_gdp_byyear$p.value[1]}` it can be assumed that the gdp of the USA is gradually increasing with year.
+
+## Budget of Awarded to Departments as a factor of Gross Domestic Product (GDP)
+
+```{r budget_by_dgp, echo=FALSE}
+plot(rd_by_gdp)
+```
+Seeing as an increase in gross domestic product occurs over time and would likely contribute to a greater budget, the budget of each department from 1976 to 2018 is presented as a potential factor of gross domestic product. Unsurprisingly, the Department of Defense has the highest budget overall and increases based on the increasing gross domestic product with a p-value of `r  {regression_gdp_byyear$p.value[which(regression_gdp_byyear[1] == "DOD")]}` and an R-squared value of `r  {regression_gdp_byyear$r.squared[which(regression_gdp_byyear[1] == "DOD")]}` indicating that while there is some variation in the model, a solid prediction of budget increase can be made for the next few years to come. 
+
+## Budget as a Factor of GDP (Department of Defense omitted)
+
+```{r rd_no_dod, echo=FALSE}
+ 
+rd_by_gdp_no_dod <- fed_r_d_spending %>% filter(department != "DOD") %>%
+  ggplot(., aes(x=gdp, y=rd_budget,
+                                          color=department))
+ordered_legend_budget2 <- filter(fed_r_d_spending, year == max(year)) %>%
+  arrange(desc(rd_budget)) %>% pull(department)
+rd_by_gdp_no_dod = rd_by_gdp_no_dod + geom_point() + geom_smooth(method = "lm") +
+  scale_color_discrete(breaks = ordered_legend_budget, name = "Department") + 
+  ylab("Spending")
+
+plot(rd_by_gdp_no_dod)
+```
+One of the main issues with the above graph is that the Department of Defense had a budget far exceeding any other department and thus obscured the correlations between gross domestic product and the other departments. Based on values of statistical significance, only four gdp-budget models had too much variation to be unable to reject the null hypothesis. The Department of Energy with a p-value of `r  {regression_gdp_byyear$p.value[which(regression_gdp_byyear[1] == "DOE")]}`, the Department of Transportation with a p-value of `r  {regression_gdp_byyear$p.value[which(regression_gdp_byyear[1] == "DOT")]}`, the National Aeronautics and Space Administration with a p-value of `r  {regression_gdp_byyear$p.value[which(regression_gdp_byyear[1] == "NASA")]}`, and the category marked other (which makes sense due to its nature as a miscellaneous category) with a p-value of `r  {regression_gdp_byyear$p.value[which(regression_gdp_byyear[1] == "other")]}`. These are the only administrations which have a budget largely uninfluenced by gross domestic product and are likely more influenced by politics. 
+
+## Energy Research and Development Spending by Year for each Associated Department
+
+```{r energy_by_year, echo=FALSE}
+energy_by_year <- ggplot(energy_spending, aes(x=year, y=energy_spending, 
+                                              color=department))
+ordered_legend_energy <- filter(energy_spending, year == max(year)) %>%
+  arrange(desc(energy_spending)) %>% pull(department)
+energy_by_year = energy_by_year + geom_point() + geom_smooth(method = "lm") +
+  scale_color_discrete(breaks = ordered_legend_energy, name = "Department") + 
+  ylab("Spending")
+plot(energy_by_year)
+```
+This plot contains a linear model for each department's energy spending over time from the year 1997 until 2018 with legend ordered by spending in the year 2018. Atomic Energy Defense is the department that has shown the most energy spending and has some high variation but contains an R^2 value of `r {regression_energy$r.squared[which(regression_energy[1] == "Atomic Energy Defense")]}` and a p-value of `r {regression_energy$p.value[which(regression_energy[1] == "Atomic Energy Defense")]}` making it still a statistically significant increase if only barely indicating that spending is increasing with year. However there were 2 departments that did not have a significant linear model with only a p.value of `r {regression_energy$p.value[which(regression_energy[1] == "Bio and Env Research*")]}` and `r {regression_energy$p.value[which(regression_energy[1] == "Fossil Energy")]}` , these were the department of Bio and Environmental Research and the department of Fossil Energy respectively. 
+
+## Energy Research and Development Spending of Departments with no Correlation to Year
+
+```{r fossil_and_research, echo=FALSE}
+fossil_and_research <- energy_spending %>% filter(department %in% c("Bio and Env Research*", "Fossil Energy")) %>% ggplot(., aes(x=year, y=energy_spending, 
+                                              color=department))
+fossil_and_research = fossil_and_research + geom_point() + geom_smooth(method = "lm") +
+  scale_color_discrete(name = "Department") + 
+  ylab("Spending") 
+plot(fossil_and_research)
+```
+As can be seen from the above subsection of the graph, the spending on energy seems to have no direct correlation with year with R-squared values of `r {regression_energy$r.squared[which(regression_energy[1] == "Bio and Env Research*")]}` and `r {regression_energy$r.squared[which(regression_energy[1] == "Fossil Energy")]}` respectively. This means that their spending on research and development for Energy is largely independent from year and may have more to do with their overall budget; data that is currently not available. 
+
+## Climate Research and Development Spending by Year
+
+```{r climate_by_year, echo=FALSE}
+climate_by_year <- ggplot(climate_spending, aes(x=year, y=gcc_spending,
+                                              color=department))
+ordered_legend_climate <- filter(climate_spending, year == max(year)) %>%
+  arrange(desc(gcc_spending)) %>% pull(department)
+climate_by_year = climate_by_year + geom_point() + geom_smooth(method = "lm") +
+  scale_color_discrete(breaks = ordered_legend_climate, name = "Department") + 
+  ylab("Spending") 
+plot(climate_by_year)
+```
+This graph details spending regarding research and development of climate related studies and solutions between the years of 2000 and 2018. As can be seen from the graph, NASA has, consistently, the highest overall spending on climate based R&D when compared to the other departments. However it also has no real correlation between the amount spend and the year meaning theres likely no real correlation with the gross domestic product level as that has been shown to continually increase over time. The linear model of NASA has a p-value of `r {regression_climate$p.value[which(regression_climate[1] == "NASA")]}`and an R-squared value of `r {format(round(regression_climate$r.squared[which(regression_climate[1] == "NASA")], 6), nsmall = 6)}` indicating high variation and no real correlation with year. However, as shown with the budget for NASA, there is no real correlation between the budget and gross domestic product
+
+## NASA's Climate Research and Development Spending as a Factor of Budgeting
+
+```{r nasa, echo=FALSE}
+nasa_years <- filter(fed_r_d_spending, 
+                     year %in% min(climate_spending$year):max(climate_spending$year), department %in% "NASA")
+
+nasa_spending <- filter(climate_spending, department %in% "NASA")
+
+nasa_spending = cbind(nasa_spending, rd_budget=nasa_years$rd_budget)
+
+nasa <- ggplot(nasa_spending, aes(x=rd_budget, y=gcc_spending,
+                                              color=department))
+nasa = nasa + geom_point() + geom_smooth(method = "lm") +
+  scale_color_discrete(name = "Department") + 
+  ylab("Spending") + xlab("Budget")
+
+regression_nasa = do(nasa_spending,
+                     glance(lm(gcc_spending ~ rd_budget, data=.)))
+
+plot(nasa)
+```
+Considering the fact that NASA's budget was not tied to gross domestic product which is a factor of year and that NASA's spending was not tied to year either, there was the potential for NASA's spending to be tied to their budget which as previously mentioned was not correlated with year. However, when plotted as a linear regression, NASA's spending does not seem to have a correlation with their budget. This is potentially due to the highly variable needs of the organization but considering the linear model has a p-value of `r  {regression_nasa$p.value[1]}` and an R-squared value of `r  {regression_nasa$r.squared[1]}` there does not seem to be any correlational models in this dataset that explain NASA's spending on climate based research and development.
+
+Overall this data was largely purposed to see which United States departments benefited the most from increasing gross domestic product over the years as well as how many different organizations utilized their budgets for both climate and energy research and development. It was found that the Atomic Energy Defense department consistently spent the most on research and development regarding energy with the Office of Science close behind. As for spending on climate research, NASA consistently spent the most; however, the spending amounts seemed to have no correlation with their budget or gross domestic product. This is likely because climate research is not the main purpose of the organization so their spending was mostly needs based. 
+
